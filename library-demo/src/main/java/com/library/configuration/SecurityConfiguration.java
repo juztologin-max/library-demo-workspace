@@ -1,0 +1,59 @@
+package com.library.configuration;
+
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.web.SecurityFilterChain;
+
+@Configuration
+@EnableMethodSecurity
+public class SecurityConfiguration {
+
+    @Value("${remember_me.key}")
+    private String remKey;
+    @Value("${remember_me.valididty}")
+    private int validity;
+
+    @Value("${app.security.enforce-https:false}")
+    private boolean enforceHttps;
+
+    @Bean
+    SecurityFilterChain securityFilterChain(HttpSecurity http) {
+        //@formatter:off
+		if(enforceHttps) {
+		http.redirectToHttps(Customizer.withDefaults());
+		 }
+		http.authorizeHttpRequests(auth -> 
+   	     auth.requestMatchers( "/login","/common/**", "/widgets/**").permitAll()
+             .requestMatchers("/admin/**").hasAuthority("ADMIN")
+             .requestMatchers("/user/**").hasAuthority("USER")
+	         .requestMatchers("/librarian/**").hasAuthority("LIBRARIAN")
+	         .requestMatchers("/dashboard").authenticated()
+	         .requestMatchers("/api/pdf/**").authenticated()
+		 .anyRequest().denyAll())
+.formLogin(loginForm -> 
+loginForm.loginPage("/login").loginProcessingUrl("/login")
+	.defaultSuccessUrl("/dashboard",true)
+	.failureHandler((req,res,ex)->	
+						res.sendRedirect("/login?message-type=error&message="
+							+ URLEncoder.encode("Incorrect username and/or password",StandardCharsets.UTF_8))))
+.logout(logout -> logout.logoutSuccessHandler((req,res,ex)->
+							res.sendRedirect("/login?message-type=info&message="
+                               + URLEncoder.encode("Successfully logged out",StandardCharsets.UTF_8))))
+
+.exceptionHandling(ex -> ex.accessDeniedPage("/errors/access-denied"))
+.rememberMe(rem -> rem.key(remKey).tokenValiditySeconds(validity)
+.rememberMeParameter("remember-checkbox"));
+//.csrf(csrf -> csrf.disable());
+
+		//@formatter:on
+        return http.build();
+
+    }
+}
